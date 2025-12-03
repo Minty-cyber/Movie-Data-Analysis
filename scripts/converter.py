@@ -6,7 +6,7 @@ from typing import Dict
 
 # A function to convert the extracted movies(In JSON format) to Dataframes
 def json_to_dataframe(data: Dict[int, dict]) -> pd.DataFrame:
-    return pd.json_normalize(data.values())
+    return pd.DataFrame.from_dict(data)
 
 
 
