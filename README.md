@@ -3,7 +3,7 @@
 This project is aimed at building a data analysis pipeline using Python and Pandas by extracting movie Data from the TMDB then cleaning and performing analysis on the extracted data
 
 
-## Requirements for staring the project
+## Requirements for starting the project
 - A TMDB account for access to Api key and Access Token for authorisation for the usage of the API
 - Have python installed
 - A virtual environment for package installations
