@@ -47,9 +47,15 @@ class MovieDataCleaner():
         """
         for column in columns:
             if column in self.df.columns:
-                self.df[column] = self.df[column].apply(
-                    lambda x: "|".join([d.get("name", "") for d in x]) if isinstance(x, list) else None
-                )
+                def transform(x):
+                    if isinstance(x, list):
+                        if all(isinstance(item, dict) for item in x):
+                            return "|".join(item.get("name", "") for item in x)
+                        if all(isinstance(item, str) for item in x):
+                            return "|".join(x)
+                    return None
+                
+                self.df[column] = self.df[column].apply(transform)
         return self
     
     def convert_dtypes(
