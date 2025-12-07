@@ -4,9 +4,13 @@ from dotenv import load_dotenv
 import logging
 from typing import List, Optional, Dict
 from settings.config import settings
+from settings.utils import get_retry_session, run_threaded
+
 
 API_KEY = settings.TMDB_API_KEY
 BASE_URL = settings.TMDB_API_URL
+
+session = get_retry_session()
 
 # Logging configuration showing metadata like time. Currently logging in the command line.
 _log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -20,7 +24,6 @@ logger = logging.getLogger(__name__)
 def extract_credit_info(movie: dict) -> dict:
     """Extract cast list, cast size, director, and crew size from TMDB credits.
     """
-
     credits = movie.get("credits", {})
 
     cast_list = [member.get("name") for member in credits.get("cast", []) if "name" in member]
@@ -41,7 +44,29 @@ def extract_credit_info(movie: dict) -> dict:
         "director": director,
         "crew_size": crew_size,
     }
-    
+  
+def fetch_single_movie(movie_id: int) -> Optional[dict]:
+    url = f"{BASE_URL}/movie/{movie_id}"
+    params = {
+        "api_key": API_KEY,
+        "append_to_response": "credits",
+    }
+
+    try:
+        resp = session.get(url, params=params, timeout=10)
+    except Exception:
+        return None
+
+    if resp.status_code != 200:
+        return None
+
+    try:
+        data = resp.json()
+        data.update(extract_credit_info(data))
+        return data
+    except Exception:
+        return None
+
 
 
 def fetch_movies(movie_ids: List[int]) -> Dict[int, Optional[dict]]:
@@ -49,66 +74,23 @@ def fetch_movies(movie_ids: List[int]) -> Dict[int, Optional[dict]]:
 
     Returns a dictionary mapping movie_id -> movie data (or None if fetch failed).
     """
-    movies = {}
+    logger.info("Fetching %d movies...", len(movie_ids))
 
-    for movie_id in movie_ids:
-        url = f"{BASE_URL}/movie/{movie_id}"
-        params = {
-            "api_key": API_KEY,
-            "append_to_response": "credits"
-        }
-        logger.debug("Requesting movie %s with params %s", movie_id, params)
-        try:
-            resp = requests.get(url, params=params, timeout=10)
-        except requests.RequestException as re:
-            movies[movie_id] = None
-            continue
+    movies = run_threaded(
+        worker_fn=fetch_single_movie,
+        items=movie_ids,
+        max_workers=10,
+    )
 
-        if resp.status_code == 200:
-            try:
-                data = resp.json()
-                credit_info = extract_credit_info(data)
-                data.update(credit_info)
-                movies[movie_id] = data
-                ## First start fetching movie titles to make sure the requests are going through
-                # title = (
-                #     movies[movie_id].get("title") if isinstance(movies[movie_id], dict) else None
-                # )
-            except ValueError:
-                # Return a None value when there is an error(Graceful error handling)
-                movies[movie_id] = None
-        else:
-            logger.error("Failed to fetch movie %s: status %s", movie_id, resp.status_code) 
-            movies[movie_id] = None
-
-    logger.info("Completed fetch, %d items processed", len(movie_ids))
+    logger.info("Completed fetch for %d movies", len(movie_ids))
     return movies
 
-
 movie_ids = [
-    0,
-    299534,
-    19995,
-    140607,
-    299536,
-    597,
-    135397,
-    420818,
-    24428,
-    168259,
-    99861,
-    284054,
-    12445,
-    181808,
-    330457,
-    351286,
-    109445,
-    321612,
-    260513,
+    0, 299534, 19995, 140607, 299536, 597,
+    135397, 420818, 24428, 168259, 99861,
+    284054, 12445, 181808, 330457, 351286,
+    109445, 321612, 260513,
 ]
-
-
-
 
 
 # Test the script
