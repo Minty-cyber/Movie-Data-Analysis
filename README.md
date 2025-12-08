@@ -15,6 +15,10 @@ This project is aimed at building a data analysis pipeline using Python and Pand
 - Create a `.env` file and have this in there
   ```python
     TMDB_API_KEY=API_KEY
+    TMDB_API_URL=https://api.themoviedb.org/3
 
 ## Starting the application
 - Run the noteook in your preferred editor to get all the outputs
+
+## Test the application
+- Run `pytest --cov=. --cov-report=term-missing` to execture all the unit tests and also get a coverage of your tests
