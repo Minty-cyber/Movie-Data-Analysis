@@ -45,17 +45,21 @@ class MovieDataCleaner():
         Extracts the 'name' field from a list of dictionaries
         and joins them with '|' into a string.
         """
-        for column in columns:
-            if column in self.df.columns:
-                def transform(x):
-                    if isinstance(x, list):
-                        if all(isinstance(item, dict) for item in x):
-                            return "|".join(item.get("name", "") for item in x)
-                        if all(isinstance(item, str) for item in x):
-                            return "|".join(x)
-                    return None
-                
-                self.df[column] = self.df[column].apply(transform)
+        valid_cols = [col for col in columns if col in self.df.columns]
+
+        def transform_cell(x):
+            if isinstance(x, list):
+                # If list of dicts,  extract names
+                if all(isinstance(item, dict) for item in x):
+                    return "|".join(item.get("name", "") for item in x)
+                # If list of strings, join directly
+                if all(isinstance(item, str) for item in x):
+                    return "|".join(x)
+            return None  
+
+        # Apply transformation to all selected columns
+        self.df[valid_cols] = self.df[valid_cols].apply(lambda col: col.map(transform_cell))
+
         return self
     
     def convert_dtypes(
@@ -68,29 +72,41 @@ class MovieDataCleaner():
         Converts the columns with numeric values to Numeric and ones with Date to DateTime,
         The `errors="coerce"` makes sure that invalid fields are replaced with safe NaNs
         """
+        # Convert numeric columns 
         if numeric_cols:
-            for col in numeric_cols:
-                if col in self.df.columns:
-                    self.df[col] = pd.to_numeric(self.df[col], errors="coerce")
-        
+            valid_numeric = [c for c in numeric_cols if c in self.df.columns]
+            self.df[valid_numeric] = self.df[valid_numeric].apply(
+                pd.to_numeric, errors="coerce"
+            )
+
+        # Convert date columns
         if date_cols:
-            for col in date_cols:
-                if col in self.df.columns:
-                    self.df[col] = pd.to_datetime(self.df[col], errors="coerce")
-        
+            valid_dates = [c for c in date_cols if c in self.df.columns]
+            self.df[valid_dates] = self.df[valid_dates].apply(
+                pd.to_datetime, errors="coerce"
+            )
+
         return self
     
     def replace_zero_with_nan(self, columns: List[str]) -> Self:
-        for col in columns:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].replace(0, pd.NA)
+        """
+        Take columns as a list of strings for the parameters part
+        Replace columns with zero entries with NaN
+        """
+        valid_cols = [col for col in columns if col in self.df.columns]
+        self.df[valid_cols] = self.df[valid_cols].replace(0, pd.NA)
         return self
     
     def convert_to_millions(self, columns: List[str]) -> Self:
-        for col in columns:
-            if col in self.df.columns:
-                self.df[col] = (self.df[col] / 1_000_000).round(2)
-                self.df.rename(columns = {col: f"{col}_musd"}, inplace=True)
+        """
+        Takes columns as a list of strings for the parameters
+        Convert columns entries to millions and attach musd to the column name
+        """
+        valid_cols = [col for col in columns if col in self.df.columns]
+        self.df[valid_cols] = (self.df[valid_cols] / 1_000_000).round(2)
+        rename_map = {col: f"{col}_musd" for col in valid_cols}
+        self.df.rename(columns=rename_map, inplace=True)
+        
         return self
     
     def fix_vote_count(self) -> Self:
@@ -99,16 +115,19 @@ class MovieDataCleaner():
         return self
     
     def clean_text_placeholders(self, columns: List[str]) -> Self:
+        """
+        Takes columns as a list of strings and cleans the entries list in the 
+        placeholder list
+        """
         placeholders = ["", " ", "No Data", "N/A", "None", "null"]
+        valid_cols = [col for col in columns if col in self.df.columns]
+        self.df[valid_cols] = self.df[valid_cols].replace(placeholders, pd.NA)
 
-        for col in columns:
-            if col in self.df.columns:
-                self.df[col] = self.df[col].replace(placeholders, pd.NA)
         return self
     
     def remove_invalid_and_duplicated(self) -> Self:
         '''
-        Function for removing inlvais and duplicates in title and id columns
+        Function for removing invalid and duplicates in title and id columns
         '''
         
         # Drop rows with missing ids or invalid titles
